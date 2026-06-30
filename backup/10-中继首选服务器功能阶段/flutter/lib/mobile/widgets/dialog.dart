@@ -158,26 +158,6 @@ void showServerSettings(
       );
     }
 
-    Future<void> setPreferred(int index) async {
-      if (index < 0 || index >= profiles.length || !profiles[index].enabled) {
-        return;
-      }
-      final nextProfiles = [
-        for (var i = 0; i < profiles.length; i++)
-          ServerProfileConfig(
-            id: profiles[i].id,
-            name: profiles[i].name,
-            idServer: profiles[i].idServer,
-            relayServer: profiles[i].relayServer,
-            apiServer: profiles[i].apiServer,
-            key: profiles[i].key,
-            enabled: profiles[i].enabled,
-            preferred: i == index,
-          )
-      ];
-      await saveAndRefresh(dialogSetState, nextProfiles);
-    }
-
     Widget content;
     if (isLoading && profiles.isEmpty) {
       content = const SizedBox(
@@ -205,7 +185,6 @@ void showServerSettings(
                           latency: latency,
                           onEdit: () =>
                               openEditor(profile: profile, index: index),
-                          onSetPreferred: () => setPreferred(index),
                         );
                       },
                     ),
@@ -283,197 +262,94 @@ Widget _serverProfileCard({
   required ServerProfileConfig profile,
   required ServerProfileLatency? latency,
   required VoidCallback onEdit,
-  required VoidCallback onSetPreferred,
 }) {
   final status = _serverProfileStatus(profile, latency);
   final relayStatus = _serverProfileRelayStatus(profile, latency);
   final relay = profile.relayServer.isEmpty ? '-' : profile.relayServer;
   final api = profile.apiServer.isEmpty ? '-' : profile.apiServer;
-  final isPreferred = profile.enabled && profile.preferred;
-  const preferredColor = Color(0xFFFFB300);
-  return _PreferredGlow(
-    active: isPreferred,
-    builder: (context, glow) {
-      final borderColor = isPreferred
-          ? Color.lerp(
-              preferredColor.withOpacity(0.45),
-              preferredColor,
-              glow,
-            )!
-          : Colors.grey.withOpacity(0.35);
-      return GestureDetector(
-        onDoubleTap: onEdit,
-        child: Card(
-          margin: EdgeInsets.zero,
-          elevation: isPreferred ? 1 : 0,
-          shadowColor: preferredColor.withOpacity(0.18 + glow * 0.18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: borderColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  profile.enabled ? Icons.dns_outlined : Icons.block_outlined,
-                  color: profile.enabled ? MyTheme.accent : Colors.grey,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+  return GestureDetector(
+    onDoubleTap: onEdit,
+    child: Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: Colors.grey.withOpacity(0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              profile.enabled ? Icons.dns_outlined : Icons.block_outlined,
+              color: profile.enabled ? MyTheme.accent : Colors.grey,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              profile.name.isEmpty
-                                  ? profile.idServer
-                                  : profile.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          if (isPreferred) ...[
-                            const SizedBox(width: 8),
-                            _serverProfileStatusChip(
-                              (
-                                text: translate('Selected'),
-                                color: preferredColor
-                              ),
-                            ),
-                          ],
-                          const SizedBox(width: 8),
-                          _serverProfileStatusChip(status),
-                        ],
+                      Expanded(
+                        child: Text(
+                          profile.name.isEmpty
+                              ? profile.idServer
+                              : profile.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        profile.idServer,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${translate('Relay Server')}: $relay',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                          ),
-                          if (relayStatus != null) ...[
-                            const SizedBox(width: 8),
-                            _serverProfileStatusChip(relayStatus),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${translate('API Server')}: $api',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
+                      _serverProfileStatusChip(status),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: translate(isPreferred ? 'Selected' : 'Default'),
-                      icon: Icon(
-                        isPreferred ? Icons.star : Icons.star_border,
-                        color: isPreferred ? preferredColor : Colors.grey,
+                  const SizedBox(height: 6),
+                  Text(
+                    profile.idServer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${translate('Relay Server')}: $relay',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.grey[700]),
+                        ),
                       ),
-                      onPressed: profile.enabled ? onSetPreferred : null,
-                    ),
-                    IconButton(
-                      tooltip: translate('Edit'),
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: onEdit,
-                    ),
-                  ],
-                ),
-              ],
+                      if (relayStatus != null) ...[
+                        const SizedBox(width: 8),
+                        _serverProfileStatusChip(relayStatus),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${translate('API Server')}: $api',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: translate('Edit'),
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: onEdit,
+            ),
+          ],
         ),
-      );
-    },
+      ),
+    ),
   );
-}
-
-class _PreferredGlow extends StatefulWidget {
-  final bool active;
-  final Widget Function(BuildContext context, double glow) builder;
-
-  const _PreferredGlow({
-    required this.active,
-    required this.builder,
-  });
-
-  @override
-  State<_PreferredGlow> createState() => _PreferredGlowState();
-}
-
-class _PreferredGlowState extends State<_PreferredGlow>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _syncAnimation();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PreferredGlow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.active != widget.active) {
-      _syncAnimation();
-    }
-  }
-
-  void _syncAnimation() {
-    if (widget.active) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.stop();
-      _controller.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final glow =
-            widget.active ? Curves.easeInOut.transform(_controller.value) : 0.0;
-        return widget.builder(context, glow);
-      },
-    );
-  }
 }
 
 ({String text, Color color}) _serverProfileStatus(
@@ -548,7 +424,6 @@ Future<void> _showServerProfileEditor({
           apiServer: profile.apiServer,
           key: profile.key,
           enabled: profile.enabled,
-          preferred: profile.preferred,
         );
   final nameCtrl = TextEditingController(text: current.name);
   final idCtrl = TextEditingController(text: current.idServer);
@@ -565,211 +440,209 @@ Future<void> _showServerProfileEditor({
 
   try {
     await dialogManager.show((setState, close, context) {
-      Future<bool> submit() async {
-        setState(() {
-          isInProgress = true;
-        });
-        final next = ServerProfileConfig(
-          id: current.id.isEmpty ? _newServerProfileId() : current.id,
-          name: nameCtrl.text.trim(),
-          idServer: idCtrl.text.trim(),
-          relayServer: relayCtrl.text.trim(),
-          apiServer: apiCtrl.text.trim(),
-          key: keyCtrl.text.trim(),
-          enabled: enabled,
-          preferred: current.preferred,
-        );
-        final ret = await _validateServerProfile(next, errMsgs);
-        if (ret) {
-          final nextProfiles = [...profiles];
-          final targetIndex =
-              editing ? index! : _findServerProfileIndex(nextProfiles, next);
-          if (targetIndex >= 0 && targetIndex < nextProfiles.length) {
-            nextProfiles[targetIndex] = next;
-          } else {
-            nextProfiles.add(next);
-          }
-          try {
-            await onProfilesSaved(nextProfiles);
-          } catch (e) {
-            debugPrint('Failed to save server profile: $e');
-            setState(() {
-              isInProgress = false;
-            });
-            return false;
-          }
+    Future<bool> submit() async {
+      setState(() {
+        isInProgress = true;
+      });
+      final next = ServerProfileConfig(
+        id: current.id.isEmpty ? _newServerProfileId() : current.id,
+        name: nameCtrl.text.trim(),
+        idServer: idCtrl.text.trim(),
+        relayServer: relayCtrl.text.trim(),
+        apiServer: apiCtrl.text.trim(),
+        key: keyCtrl.text.trim(),
+        enabled: enabled,
+      );
+      final ret = await _validateServerProfile(next, errMsgs);
+      if (ret) {
+        final nextProfiles = [...profiles];
+        final targetIndex = editing
+            ? index!
+            : _findServerProfileIndex(nextProfiles, next);
+        if (targetIndex >= 0 && targetIndex < nextProfiles.length) {
+          nextProfiles[targetIndex] = next;
+        } else {
+          nextProfiles.add(next);
         }
-        setState(() {
-          isInProgress = false;
-        });
-        return ret;
-      }
-
-      Future<bool> delete() async {
-        if (index == null || index < 0 || index >= profiles.length) {
-          return true;
-        }
-        setState(() {
-          isInProgress = true;
-        });
-        final nextProfiles = [...profiles]..removeAt(index);
         try {
           await onProfilesSaved(nextProfiles);
         } catch (e) {
-          debugPrint('Failed to delete server profile: $e');
+          debugPrint('Failed to save server profile: $e');
           setState(() {
             isInProgress = false;
           });
           return false;
         }
+      }
+      setState(() {
+        isInProgress = false;
+      });
+      return ret;
+    }
+
+    Future<bool> delete() async {
+      if (index == null || index < 0 || index >= profiles.length) {
+        return true;
+      }
+      setState(() {
+        isInProgress = true;
+      });
+      final nextProfiles = [...profiles]..removeAt(index);
+      try {
+        await onProfilesSaved(nextProfiles);
+      } catch (e) {
+        debugPrint('Failed to delete server profile: $e');
         setState(() {
           isInProgress = false;
         });
-        return true;
+        return false;
       }
+      setState(() {
+        isInProgress = false;
+      });
+      return true;
+    }
 
-      Widget buildField(
-        String label,
-        TextEditingController controller,
-        String errorMsg, {
-        String? Function(String?)? validator,
-        bool autofocus = false,
-      }) {
-        if (isDesktop || isWeb) {
-          return Row(
-            children: [
-              SizedBox(width: 120, child: Text(label)),
-              SizedBox(width: 8),
-              Expanded(
-                child: serverSettingsTextFormField(
-                  label: label,
-                  controller: controller,
-                  errorMsg: errorMsg,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 12,
-                  ),
-                  showLabelText: false,
-                  validator: validator,
-                  autofocus: autofocus,
-                ).workaroundFreezeLinuxMint(),
-              ),
-            ],
-          );
-        }
-
-        return serverSettingsTextFormField(
-          label: label,
-          controller: controller,
-          errorMsg: errorMsg,
-          validator: validator,
-        ).workaroundFreezeLinuxMint();
-      }
-
-      return CustomAlertDialog(
-        title: Row(
+    Widget buildField(
+      String label,
+      TextEditingController controller,
+      String errorMsg, {
+      String? Function(String?)? validator,
+      bool autofocus = false,
+    }) {
+      if (isDesktop || isWeb) {
+        return Row(
           children: [
-            Expanded(child: Text(translate(editing ? 'Edit' : 'Add')))
+            SizedBox(width: 120, child: Text(label)),
+            SizedBox(width: 8),
+            Expanded(
+              child: serverSettingsTextFormField(
+                label: label,
+                controller: controller,
+                errorMsg: errorMsg,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
+                showLabelText: false,
+                validator: validator,
+                autofocus: autofocus,
+              ).workaroundFreezeLinuxMint(),
+            ),
           ],
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 500),
-          child: Form(
-            child: Obx(
-              () => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  buildField(translate('Name'), nameCtrl, ''),
-                  SizedBox(height: 8),
+        );
+      }
+
+      return serverSettingsTextFormField(
+        label: label,
+        controller: controller,
+        errorMsg: errorMsg,
+        validator: validator,
+      ).workaroundFreezeLinuxMint();
+    }
+
+    return CustomAlertDialog(
+      title: Row(
+        children: [Expanded(child: Text(translate(editing ? 'Edit' : 'Add')))],
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 500),
+        child: Form(
+          child: Obx(
+            () => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildField(translate('Name'), nameCtrl, ''),
+                SizedBox(height: 8),
+                buildField(
+                  translate('ID Server'),
+                  idCtrl,
+                  idServerMsg.value,
+                  autofocus: true,
+                ),
+                SizedBox(height: 8),
+                if (!isIOS && !isWeb) ...[
                   buildField(
-                    translate('ID Server'),
-                    idCtrl,
-                    idServerMsg.value,
-                    autofocus: true,
+                    translate('Relay Server'),
+                    relayCtrl,
+                    relayServerMsg.value,
                   ),
                   SizedBox(height: 8),
-                  if (!isIOS && !isWeb) ...[
-                    buildField(
-                      translate('Relay Server'),
-                      relayCtrl,
-                      relayServerMsg.value,
-                    ),
-                    SizedBox(height: 8),
-                  ],
-                  buildField(
-                    translate('API Server'),
-                    apiCtrl,
-                    apiServerMsg.value,
-                    validator: (v) {
-                      if (v != null && v.isNotEmpty) {
-                        if (!(v.startsWith('http://') ||
-                            v.startsWith("https://"))) {
-                          return translate("invalid_http");
-                        }
-                      }
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 8),
-                  buildField('Key', keyCtrl, ''),
-                  SizedBox(height: 4),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(translate('Enabled')),
-                    value: enabled,
-                    onChanged: (value) {
-                      setState(() {
-                        enabled = value;
-                      });
-                    },
-                  ),
-                  if (isInProgress)
-                    Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: LinearProgressIndicator(),
-                    ),
                 ],
-              ),
+                buildField(
+                  translate('API Server'),
+                  apiCtrl,
+                  apiServerMsg.value,
+                  validator: (v) {
+                    if (v != null && v.isNotEmpty) {
+                      if (!(v.startsWith('http://') ||
+                          v.startsWith("https://"))) {
+                        return translate("invalid_http");
+                      }
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 8),
+                buildField('Key', keyCtrl, ''),
+                SizedBox(height: 4),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(translate('Enabled')),
+                  value: enabled,
+                  onChanged: (value) {
+                    setState(() {
+                      enabled = value;
+                    });
+                  },
+                ),
+                if (isInProgress)
+                  Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: LinearProgressIndicator(),
+                  ),
+              ],
             ),
           ),
         ),
-        actions: [
-          if (editing)
-            dialogButton(
-              'Delete',
-              onPressed: isInProgress
-                  ? null
-                  : () async {
-                      if (await delete()) {
-                        close();
-                        showToast(translate('Successful'));
-                      }
-                    },
-              isOutline: true,
-              style: TextStyle(color: Colors.red),
-            ),
+      ),
+      actions: [
+        if (editing)
           dialogButton(
-            'Cancel',
-            onPressed: () {
-              close();
-            },
-            isOutline: true,
-          ),
-          dialogButton(
-            'OK',
+            'Delete',
             onPressed: isInProgress
                 ? null
                 : () async {
-                    if (await submit()) {
+                    if (await delete()) {
                       close();
                       showToast(translate('Successful'));
-                    } else {
-                      showToast(translate('Failed'));
                     }
                   },
+            isOutline: true,
+            style: TextStyle(color: Colors.red),
           ),
-        ],
-      );
+        dialogButton(
+          'Cancel',
+          onPressed: () {
+            close();
+          },
+          isOutline: true,
+        ),
+        dialogButton(
+          'OK',
+          onPressed: isInProgress
+              ? null
+              : () async {
+                  if (await submit()) {
+                    close();
+                    showToast(translate('Successful'));
+                  } else {
+                    showToast(translate('Failed'));
+                  }
+                },
+        ),
+      ],
+    );
     });
   } finally {
     nameCtrl.dispose();
@@ -822,8 +695,9 @@ Future<bool> _validateServerProfile(
   config.relayServer = removeEndSlash(config.relayServer.trim());
   config.apiServer = removeEndSlash(config.apiServer.trim());
   config.key = config.key.trim();
-  config.name =
-      config.name.trim().isEmpty ? config.idServer : config.name.trim();
+  config.name = config.name.trim().isEmpty
+      ? config.idServer
+      : config.name.trim();
   if (config.idServer.isEmpty) {
     errMsgs[0].value = translate('Invalid server configuration');
     return false;

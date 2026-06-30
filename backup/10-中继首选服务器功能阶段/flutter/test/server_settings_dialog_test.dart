@@ -13,7 +13,6 @@ void main() {
       apiServer: 'https://api.example.test',
       key: 'AbCdR1c1E=',
       enabled: true,
-      preferred: true,
     );
 
     final decoded = serverProfilesFromJson(serverProfilesToJson([profile]));
@@ -23,59 +22,6 @@ void main() {
     expect(decoded.first.idServer, '192.0.2.10');
     expect(decoded.first.key, 'AbCdR1c1E=');
     expect(decoded.first.enabled, isTrue);
-    expect(decoded.first.preferred, isTrue);
-  });
-
-  test('server profile json defaults first enabled profile to preferred', () {
-    final decoded = serverProfilesFromJson('''
-      [
-        {"id":"server-a","idServer":"a.example.test","enabled":true},
-        {"id":"server-b","idServer":"b.example.test","enabled":true}
-      ]
-    ''');
-
-    expect(decoded, hasLength(2));
-    expect(decoded[0].preferred, isTrue);
-    expect(decoded[1].preferred, isFalse);
-  });
-
-  test('server profile preferences keep only one enabled preferred', () {
-    final normalized = normalizeServerProfilePreferences([
-      ServerProfileConfig(
-        id: 'server-a',
-        idServer: 'a.example.test',
-        enabled: true,
-        preferred: true,
-      ),
-      ServerProfileConfig(
-        id: 'server-b',
-        idServer: 'b.example.test',
-        enabled: true,
-        preferred: true,
-      ),
-    ]);
-
-    expect(normalized[0].preferred, isTrue);
-    expect(normalized[1].preferred, isFalse);
-  });
-
-  test('server profile preferences fall back when preferred is disabled', () {
-    final normalized = normalizeServerProfilePreferences([
-      ServerProfileConfig(
-        id: 'server-a',
-        idServer: 'a.example.test',
-        enabled: false,
-        preferred: true,
-      ),
-      ServerProfileConfig(
-        id: 'server-b',
-        idServer: 'b.example.test',
-        enabled: true,
-      ),
-    ]);
-
-    expect(normalized[0].preferred, isFalse);
-    expect(normalized[1].preferred, isTrue);
   });
 
   test('server profile latency parses relay result', () {

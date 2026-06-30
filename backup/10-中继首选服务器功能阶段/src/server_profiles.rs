@@ -22,8 +22,6 @@ pub struct ServerProfile {
     pub key: String,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    #[serde(default)]
-    pub preferred: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -102,38 +100,7 @@ fn sanitize_profiles(mut profiles: Vec<ServerProfile>) -> Vec<ServerProfile> {
             out.push(profile);
         }
     }
-    normalize_preferred(&mut out);
     out
-}
-
-fn normalize_preferred(profiles: &mut [ServerProfile]) {
-    let preferred_index = profiles
-        .iter()
-        .position(|profile| profile.enabled && profile.preferred)
-        .or_else(|| profiles.iter().position(|profile| profile.enabled));
-    for (idx, profile) in profiles.iter_mut().enumerate() {
-        profile.preferred = profile.enabled && Some(idx) == preferred_index;
-    }
-}
-
-fn enabled_profiles_from(profiles: &[ServerProfile]) -> Vec<ServerProfile> {
-    let preferred_index = profiles
-        .iter()
-        .position(|profile| profile.enabled && profile.preferred);
-    let mut enabled = Vec::new();
-    if let Some(index) = preferred_index {
-        enabled.push(profiles[index].clone());
-    }
-    enabled.extend(
-        profiles
-            .iter()
-            .enumerate()
-            .filter(|(index, profile)| {
-                profile.enabled && !profile.id_server.is_empty() && Some(*index) != preferred_index
-            })
-            .map(|(_, profile)| profile.clone()),
-    );
-    enabled
 }
 
 fn decode_profiles(json: &str) -> Vec<ServerProfile> {
@@ -169,12 +136,14 @@ fn legacy_profile_from_options() -> Option<ServerProfile> {
         api_server,
         key,
         enabled: true,
-        preferred: true,
     })
 }
 
 fn sync_legacy_options(profiles: &[ServerProfile]) {
-    let enabled = enabled_profiles_from(profiles);
+    let enabled: Vec<&ServerProfile> = profiles
+        .iter()
+        .filter(|profile| profile.enabled && !profile.id_server.is_empty())
+        .collect();
     let servers = enabled
         .iter()
         .map(|profile| profile.id_server.clone())
@@ -242,7 +211,10 @@ pub fn auto_switch_threshold_ms() -> u64 {
 }
 
 pub fn enabled_profiles() -> Vec<ServerProfile> {
-    enabled_profiles_from(&get_profiles())
+    get_profiles()
+        .into_iter()
+        .filter(|profile| profile.enabled && !profile.id_server.is_empty())
+        .collect()
 }
 
 fn endpoint_matches(configured: &str, endpoint: &str, default_port: i32) -> bool {
@@ -256,11 +228,7 @@ fn endpoint_matches(configured: &str, endpoint: &str, default_port: i32) -> bool
 }
 
 pub fn key_for_server(server: &str) -> String {
-    key_for_server_from(&get_profiles(), server)
-}
-
-fn key_for_server_from(profiles: &[ServerProfile], server: &str) -> String {
-    enabled_profiles_from(profiles)
+    enabled_profiles()
         .into_iter()
         .find(|profile| {
             endpoint_matches(&profile.id_server, server, RENDEZVOUS_PORT)
@@ -271,11 +239,7 @@ fn key_for_server_from(profiles: &[ServerProfile], server: &str) -> String {
 }
 
 pub fn relay_for_server(server: &str) -> String {
-    relay_for_server_from(&get_profiles(), server)
-}
-
-fn relay_for_server_from(profiles: &[ServerProfile], server: &str) -> String {
-    enabled_profiles_from(profiles)
+    enabled_profiles()
         .into_iter()
         .find(|profile| endpoint_matches(&profile.id_server, server, RENDEZVOUS_PORT))
         .map(|profile| profile.relay_server)
@@ -283,11 +247,7 @@ fn relay_for_server_from(profiles: &[ServerProfile], server: &str) -> String {
 }
 
 pub fn api_for_server(server: &str) -> String {
-    api_for_server_from(&get_profiles(), server)
-}
-
-fn api_for_server_from(profiles: &[ServerProfile], server: &str) -> String {
-    enabled_profiles_from(profiles)
+    enabled_profiles()
         .into_iter()
         .find(|profile| endpoint_matches(&profile.id_server, server, RENDEZVOUS_PORT))
         .map(|profile| profile.api_server)
@@ -322,7 +282,6 @@ pub fn import_profiles_from_doc(path: &str) -> String {
                     api_server: String::new(),
                     key: key.to_owned(),
                     enabled: true,
-                    preferred: false,
                 });
                 pending_server.clear();
             }
@@ -533,7 +492,6 @@ mod tests {
                         api_server: String::new(),
                         key: key.to_owned(),
                         enabled: true,
-                        preferred: false,
                     });
                     pending_server.clear();
                 }
@@ -564,111 +522,6 @@ mod tests {
         ]);
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id_server, "example.com");
-    }
-
-    #[test]
-    fn old_json_defaults_first_enabled_profile_to_preferred() {
-        let profiles = decode_profiles(
-            r#"[
-                {
-                    "id":"a",
-                    "name":"A",
-                    "idServer":"a.example.test",
-                    "relayServer":"relay-a.example.test",
-                    "apiServer":"",
-                    "key":"key-a",
-                    "enabled":true
-                },
-                {
-                    "id":"b",
-                    "name":"B",
-                    "idServer":"b.example.test",
-                    "relayServer":"relay-b.example.test",
-                    "apiServer":"",
-                    "key":"key-b",
-                    "enabled":true
-                }
-            ]"#,
-        );
-
-        assert_eq!(profiles.len(), 2);
-        assert!(profiles[0].preferred);
-        assert!(!profiles[1].preferred);
-    }
-
-    #[test]
-    fn sanitize_keeps_only_first_enabled_preferred_profile() {
-        let profiles = sanitize_profiles(vec![
-            ServerProfile {
-                id: "a".to_owned(),
-                id_server: "a.example.test".to_owned(),
-                enabled: true,
-                preferred: true,
-                ..Default::default()
-            },
-            ServerProfile {
-                id: "b".to_owned(),
-                id_server: "b.example.test".to_owned(),
-                enabled: true,
-                preferred: true,
-                ..Default::default()
-            },
-        ]);
-
-        assert!(profiles[0].preferred);
-        assert!(!profiles[1].preferred);
-    }
-
-    #[test]
-    fn disabled_preferred_falls_back_to_next_enabled_profile() {
-        let profiles = sanitize_profiles(vec![
-            ServerProfile {
-                id: "a".to_owned(),
-                id_server: "a.example.test".to_owned(),
-                enabled: false,
-                preferred: true,
-                ..Default::default()
-            },
-            ServerProfile {
-                id: "b".to_owned(),
-                id_server: "b.example.test".to_owned(),
-                enabled: true,
-                ..Default::default()
-            },
-        ]);
-
-        assert!(!profiles[0].preferred);
-        assert!(profiles[1].preferred);
-    }
-
-    #[test]
-    fn enabled_profiles_are_returned_preferred_first() {
-        let profiles = sanitize_profiles(vec![
-            ServerProfile {
-                id: "a".to_owned(),
-                id_server: "a.example.test".to_owned(),
-                enabled: true,
-                ..Default::default()
-            },
-            ServerProfile {
-                id: "b".to_owned(),
-                id_server: "b.example.test".to_owned(),
-                relay_server: "relay-b.example.test".to_owned(),
-                key: "key-b".to_owned(),
-                enabled: true,
-                preferred: true,
-                ..Default::default()
-            },
-        ]);
-        let enabled = enabled_profiles_from(&profiles);
-
-        assert_eq!(enabled[0].id_server, "b.example.test");
-        assert_eq!(enabled[1].id_server, "a.example.test");
-        assert_eq!(
-            relay_for_server_from(&profiles, "b.example.test"),
-            "relay-b.example.test"
-        );
-        assert_eq!(key_for_server_from(&profiles, "b.example.test"), "key-b");
     }
 
     #[test]

@@ -2946,7 +2946,8 @@ class ServerConfig {
         key = options['key'] ?? "";
 }
 
-const String kServerProfilesDocPath = r'G:\data\app\rustdesk\docs\远程服务器.md';
+const String kServerProfilesDocPath =
+    r'G:\data\app\rustdesk\docs\远程服务器.md';
 
 class ServerProfileConfig {
   late String id;
@@ -2956,7 +2957,6 @@ class ServerProfileConfig {
   late String apiServer;
   late String key;
   late bool enabled;
-  late bool preferred;
 
   ServerProfileConfig({
     String? id,
@@ -2966,7 +2966,6 @@ class ServerProfileConfig {
     String? apiServer,
     String? key,
     bool? enabled,
-    bool? preferred,
   }) {
     this.id = id?.trim() ?? '';
     this.idServer = idServer?.trim() ?? '';
@@ -2975,7 +2974,6 @@ class ServerProfileConfig {
     this.key = key?.trim() ?? '';
     this.name = name?.trim().isNotEmpty == true ? name!.trim() : this.idServer;
     this.enabled = enabled ?? true;
-    this.preferred = preferred ?? false;
   }
 
   ServerProfileConfig.fromServerConfig(ServerConfig config)
@@ -2986,7 +2984,6 @@ class ServerProfileConfig {
           apiServer: config.apiServer,
           key: config.key,
           enabled: true,
-          preferred: true,
         );
 
   ServerProfileConfig.fromJson(Map<String, dynamic> json)
@@ -2998,7 +2995,6 @@ class ServerProfileConfig {
           apiServer: json['apiServer'] ?? '',
           key: json['key'] ?? '',
           enabled: json['enabled'] != false,
-          preferred: json['preferred'] == true,
         );
 
   Map<String, dynamic> toJson() => {
@@ -3009,7 +3005,6 @@ class ServerProfileConfig {
         'apiServer': apiServer.trim(),
         'key': key.trim(),
         'enabled': enabled,
-        'preferred': preferred,
       };
 }
 
@@ -3044,10 +3039,9 @@ class ServerProfileLatency {
 
 List<ServerProfileConfig> serverProfilesFromJson(String json) {
   try {
-    final profiles = (jsonDecode(json) as List<dynamic>)
+    return (jsonDecode(json) as List<dynamic>)
         .map((e) => ServerProfileConfig.fromJson(e as Map<String, dynamic>))
         .toList();
-    return normalizeServerProfilePreferences(profiles);
   } catch (e) {
     debugPrint('Invalid server profiles: $e');
     return [];
@@ -3055,30 +3049,7 @@ List<ServerProfileConfig> serverProfilesFromJson(String json) {
 }
 
 String serverProfilesToJson(List<ServerProfileConfig> profiles) {
-  final normalized = normalizeServerProfilePreferences(profiles);
-  return jsonEncode(normalized.map((e) => e.toJson()).toList());
-}
-
-List<ServerProfileConfig> normalizeServerProfilePreferences(
-    List<ServerProfileConfig> profiles) {
-  final preferredIndex =
-      profiles.indexWhere((profile) => profile.enabled && profile.preferred);
-  final fallbackIndex = preferredIndex >= 0
-      ? preferredIndex
-      : profiles.indexWhere((profile) => profile.enabled);
-  return [
-    for (var i = 0; i < profiles.length; i++)
-      ServerProfileConfig(
-        id: profiles[i].id,
-        name: profiles[i].name,
-        idServer: profiles[i].idServer,
-        relayServer: profiles[i].relayServer,
-        apiServer: profiles[i].apiServer,
-        key: profiles[i].key,
-        enabled: profiles[i].enabled,
-        preferred: profiles[i].enabled && i == fallbackIndex,
-      )
-  ];
+  return jsonEncode(profiles.map((e) => e.toJson()).toList());
 }
 
 Future<List<ServerProfileConfig>> loadServerProfiles(
