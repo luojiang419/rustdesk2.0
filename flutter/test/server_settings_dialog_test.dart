@@ -1,8 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/mobile/widgets/dialog.dart';
 
 void main() {
+  test('server profile json roundtrip keeps independent server key', () {
+    final profile = ServerProfileConfig(
+      id: 'server-a',
+      name: 'Primary',
+      idServer: ' 192.0.2.10 ',
+      relayServer: '192.0.2.10',
+      apiServer: 'https://api.example.test',
+      key: 'AbCdR1c1E=',
+      enabled: true,
+    );
+
+    final decoded = serverProfilesFromJson(serverProfilesToJson([profile]));
+
+    expect(decoded, hasLength(1));
+    expect(decoded.first.id, 'server-a');
+    expect(decoded.first.idServer, '192.0.2.10');
+    expect(decoded.first.key, 'AbCdR1c1E=');
+    expect(decoded.first.enabled, isTrue);
+  });
+
+  test('server profile latency parses relay result', () {
+    final latency = ServerProfileLatency.fromJson({
+      'id': 'server-a',
+      'idServer': 'id.example.test',
+      'relayServer': 'relay.example.test',
+      'latencyMs': 42,
+      'error': '',
+      'relayLatencyMs': 51,
+      'relayError': '',
+    });
+
+    expect(latency.id, 'server-a');
+    expect(latency.idServer, 'id.example.test');
+    expect(latency.relayServer, 'relay.example.test');
+    expect(latency.latencyMs, 42);
+    expect(latency.relayLatencyMs, 51);
+    expect(latency.relayError, '');
+  });
+
   testWidgets('server settings text fields preserve literal input',
       (tester) async {
     final controller = TextEditingController(text: 'AbCdR1c1E=');

@@ -170,7 +170,7 @@ mod cpal_impl {
     use super::*;
     use cpal::{
         traits::{DeviceTrait, HostTrait, StreamTrait},
-        BufferSize, Device, Host, InputCallbackInfo, StreamConfig, SupportedStreamConfig,
+        BufferSize, Device, Host, InputCallbackInfo, Sample, StreamConfig, SupportedStreamConfig,
     };
 
     lazy_static::lazy_static! {
@@ -392,7 +392,8 @@ mod cpal_impl {
         encode_channel: magnum_opus::Channels,
     ) -> ResultType<cpal::Stream>
     where
-        T: cpal::SizedSample + dasp::sample::ToSample<f32>,
+        T: cpal::SizedSample,
+        f32: cpal::FromSample<T>,
     {
         let err_fn = move |err| {
             // too many UnknownErrno, will improve later
@@ -423,7 +424,7 @@ mod cpal_impl {
         let stream = device.build_input_stream(
             &stream_config,
             move |data: &[T], _: &InputCallbackInfo| {
-                let buffer: Vec<f32> = data.iter().map(|s| T::to_sample(*s)).collect();
+                let buffer: Vec<f32> = data.iter().map(|s| f32::from_sample(*s)).collect();
                 let mut lock = INPUT_BUFFER.lock().unwrap();
                 lock.extend(buffer);
                 while lock.len() >= rechannel_len {

@@ -424,7 +424,7 @@ impl RendezvousMediator {
         let host = check_port(&host, RENDEZVOUS_PORT);
         log::info!("start tcp: {}", hbb_common::websocket::check_ws(&host));
         let mut conn = connect_tcp(host.clone(), CONNECT_TIMEOUT).await?;
-        let key = crate::get_key(true).await;
+        let key = crate::get_key_for_server(&host, true).await;
         crate::secure_tcp(&mut conn, &key).await?;
         let mut rz = Self {
             addr: conn.local_addr().into_target_addr()?,
@@ -823,7 +823,10 @@ impl RendezvousMediator {
     }
 
     fn get_relay_server(&self, provided_by_rendezvous_server: String) -> String {
-        let mut relay_server = Config::get_option("relay-server");
+        let mut relay_server = crate::server_profiles::relay_for_server(&self.host);
+        if relay_server.is_empty() {
+            relay_server = Config::get_option("relay-server");
+        }
         if relay_server.is_empty() {
             relay_server = provided_by_rendezvous_server;
         }

@@ -2,9 +2,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(rustdesk LANGUAGES CXX)
 
-# The name of the executable created for the application. Change this to change
-# the on-disk name of your application.
-set(BINARY_NAME "rustdesk")
+# Keep a simple logical target name for CMake and set the on-disk executable
+# name separately so the test build can include a dot.
+set(BINARY_NAME "rustdesk2_0")
+set(BINARY_OUTPUT_NAME "rustdesk2.0")
 
 # Explicitly opt into modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

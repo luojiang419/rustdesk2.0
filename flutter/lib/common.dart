@@ -381,7 +381,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -412,7 +412,7 @@ class MyTheme {
     cardColor: grayBg,
     hintColor: Color(0xFFAAAAAA),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
+    tabBarTheme: const TabBarThemeData(
       labelColor: Colors.black87,
     ),
     tooltipTheme: tooltipTheme(),
@@ -479,7 +479,7 @@ class MyTheme {
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       elevation: 15,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18.0),
@@ -513,7 +513,7 @@ class MyTheme {
     ),
     cardColor: Color(0xFF24252B),
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
+    tabBarTheme: const TabBarThemeData(
       labelColor: Colors.white70,
     ),
     tooltipTheme: tooltipTheme(),
@@ -2944,6 +2944,145 @@ class ServerConfig {
         relayServer = options['relay-server'] ?? "",
         apiServer = options['api-server'] ?? "",
         key = options['key'] ?? "";
+}
+
+const String kServerProfilesDocPath =
+    r'G:\data\app\rustdesk\docs\远程服务器.md';
+
+class ServerProfileConfig {
+  late String id;
+  late String name;
+  late String idServer;
+  late String relayServer;
+  late String apiServer;
+  late String key;
+  late bool enabled;
+
+  ServerProfileConfig({
+    String? id,
+    String? name,
+    String? idServer,
+    String? relayServer,
+    String? apiServer,
+    String? key,
+    bool? enabled,
+  }) {
+    this.id = id?.trim() ?? '';
+    this.idServer = idServer?.trim() ?? '';
+    this.relayServer = relayServer?.trim() ?? '';
+    this.apiServer = apiServer?.trim() ?? '';
+    this.key = key?.trim() ?? '';
+    this.name = name?.trim().isNotEmpty == true ? name!.trim() : this.idServer;
+    this.enabled = enabled ?? true;
+  }
+
+  ServerProfileConfig.fromServerConfig(ServerConfig config)
+      : this(
+          name: config.idServer,
+          idServer: config.idServer,
+          relayServer: config.relayServer,
+          apiServer: config.apiServer,
+          key: config.key,
+          enabled: true,
+        );
+
+  ServerProfileConfig.fromJson(Map<String, dynamic> json)
+      : this(
+          id: json['id'] ?? '',
+          name: json['name'] ?? '',
+          idServer: json['idServer'] ?? '',
+          relayServer: json['relayServer'] ?? '',
+          apiServer: json['apiServer'] ?? '',
+          key: json['key'] ?? '',
+          enabled: json['enabled'] != false,
+        );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'idServer': idServer.trim(),
+        'relayServer': relayServer.trim(),
+        'apiServer': apiServer.trim(),
+        'key': key.trim(),
+        'enabled': enabled,
+      };
+}
+
+class ServerProfileLatency {
+  final String id;
+  final String idServer;
+  final String relayServer;
+  final int latencyMs;
+  final String error;
+  final int relayLatencyMs;
+  final String relayError;
+
+  ServerProfileLatency({
+    required this.id,
+    required this.idServer,
+    required this.relayServer,
+    required this.latencyMs,
+    required this.error,
+    required this.relayLatencyMs,
+    required this.relayError,
+  });
+
+  ServerProfileLatency.fromJson(Map<String, dynamic> json)
+      : id = json['id'] ?? '',
+        idServer = json['idServer'] ?? '',
+        relayServer = json['relayServer'] ?? '',
+        latencyMs = json['latencyMs'] ?? -1,
+        error = json['error'] ?? '',
+        relayLatencyMs = json['relayLatencyMs'] ?? -1,
+        relayError = json['relayError'] ?? '';
+}
+
+List<ServerProfileConfig> serverProfilesFromJson(String json) {
+  try {
+    return (jsonDecode(json) as List<dynamic>)
+        .map((e) => ServerProfileConfig.fromJson(e as Map<String, dynamic>))
+        .toList();
+  } catch (e) {
+    debugPrint('Invalid server profiles: $e');
+    return [];
+  }
+}
+
+String serverProfilesToJson(List<ServerProfileConfig> profiles) {
+  return jsonEncode(profiles.map((e) => e.toJson()).toList());
+}
+
+Future<List<ServerProfileConfig>> loadServerProfiles(
+    {bool importDocIfEmpty = true}) async {
+  var json = await bind.mainGetServerProfiles();
+  var profiles = serverProfilesFromJson(json);
+  if (!isWeb && importDocIfEmpty && profiles.isEmpty) {
+    json = await bind.mainImportServerProfilesFromDoc(
+        path: kServerProfilesDocPath);
+    profiles = serverProfilesFromJson(json);
+  }
+  return profiles;
+}
+
+Future<List<ServerProfileConfig>> saveServerProfiles(
+    List<ServerProfileConfig> profiles) async {
+  final json =
+      await bind.mainSaveServerProfiles(json: serverProfilesToJson(profiles));
+  return serverProfilesFromJson(json);
+}
+
+Future<Map<String, ServerProfileLatency>> testServerProfiles(
+    List<ServerProfileConfig> profiles) async {
+  final res =
+      await bind.mainTestServerProfiles(json: serverProfilesToJson(profiles));
+  try {
+    final values = (jsonDecode(res) as List<dynamic>)
+        .map((e) => ServerProfileLatency.fromJson(e as Map<String, dynamic>));
+    return {for (final item in values) item.id: item};
+  } catch (e) {
+    debugPrint('Invalid server profile latency result: $e');
+    return {};
+  }
 }
 
 Widget dialogButton(String text,

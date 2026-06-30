@@ -370,7 +370,7 @@ impl Client {
 
     async fn _start_inner(
         peer: String,
-        key: String,
+        mut key: String,
         token: String,
         conn_type: ConnType,
         interface: impl Interface,
@@ -408,6 +408,10 @@ impl Client {
             crate::refresh_rendezvous_server();
         } else if !contained {
             crate::refresh_rendezvous_server();
+        }
+        let profile_key = crate::server_profiles::key_for_server(&rendezvous_server);
+        if !profile_key.is_empty() {
+            key = profile_key;
         }
         log::info!("rendezvous server: {}", rendezvous_server);
         let mut socket = socket?;
@@ -4006,7 +4010,7 @@ async fn hc_connection_(
 
     let host = check_port(&rendezvous_server, RENDEZVOUS_PORT);
     let mut conn = connect_tcp(host.clone(), CONNECT_TIMEOUT).await?;
-    let key = crate::get_key(true).await;
+    let key = crate::get_key_for_server(&host, true).await;
     crate::secure_tcp(&mut conn, &key).await?;
     let mut msg_out = RendezvousMessage::new();
     msg_out.set_hc(HealthCheck {

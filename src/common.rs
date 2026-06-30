@@ -407,6 +407,16 @@ pub fn audio_resample(
     .unwrap_or_default()
 }
 
+#[cfg(not(any(feature = "use_dasp", feature = "use_samplerate")))]
+pub fn audio_resample(
+    data: &[f32],
+    _sample_rate0: u32,
+    _sample_rate: u32,
+    _channels: u16,
+) -> Vec<f32> {
+    data.to_vec()
+}
+
 pub fn audio_rechannel(
     input: Vec<f32>,
     in_hz: u32,
@@ -1220,7 +1230,7 @@ async fn tcp_proxy_request(
     let overall_timeout = CONNECT_TIMEOUT + READ_TIMEOUT;
     timeout(overall_timeout, async {
         let mut conn = socket_client::connect_tcp(&*tcp_addr, CONNECT_TIMEOUT).await?;
-        let key = crate::get_key(true).await;
+        let key = get_key_for_server(&tcp_addr, true).await;
         secure_tcp_silent(&mut conn, &key).await?;
 
         let mut req = HttpProxyRequest::new();
@@ -1822,6 +1832,15 @@ pub async fn get_key(sync: bool) -> String {
         key = config::RS_PUB_KEY.to_owned();
     }
     key
+}
+
+pub async fn get_key_for_server(server: &str, sync: bool) -> String {
+    let key = crate::server_profiles::key_for_server(server);
+    if key.is_empty() {
+        get_key(sync).await
+    } else {
+        key
+    }
 }
 
 pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {

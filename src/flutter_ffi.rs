@@ -1074,6 +1074,22 @@ pub fn main_test_if_valid_server(server: String, test_with_proxy: bool) -> Strin
     test_if_valid_server(server, test_with_proxy)
 }
 
+pub fn main_get_server_profiles() -> String {
+    crate::server_profiles::get_profiles_json()
+}
+
+pub fn main_save_server_profiles(json: String) -> String {
+    crate::server_profiles::save_profiles_json(&json)
+}
+
+pub fn main_import_server_profiles_from_doc(path: String) -> String {
+    crate::server_profiles::import_profiles_from_doc(&path)
+}
+
+pub fn main_test_server_profiles(json: String) -> String {
+    crate::server_profiles::test_profiles_latency_json(json)
+}
+
 pub fn main_set_socks(proxy: String, username: String, password: String) {
     set_socks(proxy, username, password)
 }

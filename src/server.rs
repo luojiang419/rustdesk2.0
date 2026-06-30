@@ -321,12 +321,12 @@ async fn create_relay_connection_(
     meta: ConnectionMeta,
 ) -> ResultType<()> {
     let mut stream = socket_client::connect_tcp(
-        socket_client::ipv4_to_ipv6(crate::check_port(relay_server, RELAY_PORT), ipv4),
+        socket_client::ipv4_to_ipv6(crate::check_port(&relay_server, RELAY_PORT), ipv4),
         CONNECT_TIMEOUT,
     )
     .await?;
     let mut msg_out = RendezvousMessage::new();
-    let licence_key = crate::get_key(true).await;
+    let licence_key = crate::get_key_for_server(&relay_server, true).await;
     msg_out.set_request_relay(RequestRelay {
         licence_key,
         uuid,
