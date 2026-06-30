@@ -1287,17 +1287,15 @@ fn get_subkey(name: &str, wow: bool) -> String {
 }
 
 fn get_valid_subkey() -> String {
-    let app_name = crate::get_app_name();
-    if app_name == "RustDesk" {
-        let subkey = get_subkey(IS1, false);
-        if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-            return subkey;
-        }
-        let subkey = get_subkey(IS1, true);
-        if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-            return subkey;
-        }
+    let subkey = get_subkey(IS1, false);
+    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
+        return subkey;
     }
+    let subkey = get_subkey(IS1, true);
+    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
+        return subkey;
+    }
+    let app_name = crate::get_app_name();
     let subkey = get_subkey(&app_name, true);
     if !get_reg_of(&subkey, "InstallLocation").is_empty() {
         return subkey;

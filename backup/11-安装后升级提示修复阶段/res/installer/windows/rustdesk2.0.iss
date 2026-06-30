@@ -3,8 +3,6 @@
 #define MyAppPublisher "luojiang419"
 #define MyAppExeName "rustdesk2.0.exe"
 #define MyAppId "{{7DB3360A-DC3B-44AA-9A46-9E41F6942B50}"
-#define MyRuntimeAppName "rustdesk2.0"
-#define MyBuildDate GetDateTimeString("yyyy-mm-dd hh:nn", "", "")
 
 [Setup]
 AppId={#MyAppId}
@@ -40,10 +38,6 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\..\..\flutter\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-[Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyRuntimeAppName}"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyRuntimeAppName}"; ValueType: string; ValueName: "BuildDate"; ValueData: "{#MyBuildDate}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

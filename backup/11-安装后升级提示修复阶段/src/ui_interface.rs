@@ -115,10 +115,6 @@ pub fn install_me(_options: String, _path: String, _silent: bool, _debug: bool) 
 
 #[inline]
 pub fn update_me(_path: String) {
-    if crate::common::is_custom_client() {
-        log::info!("Skip built-in update flow for custom client");
-        return;
-    }
     goto_install();
 }
 
@@ -570,11 +566,8 @@ pub fn is_installed_lower_version() -> bool {
     return false;
     #[cfg(windows)]
     {
-        if crate::common::is_custom_client() {
-            return false;
-        }
         let b = crate::platform::windows::get_reg("BuildDate");
-        return !b.is_empty() && crate::BUILD_DATE.cmp(&b).is_gt();
+        return crate::BUILD_DATE.cmp(&b).is_gt();
     }
 }
 
