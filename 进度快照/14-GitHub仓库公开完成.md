@@ -12,7 +12,7 @@
   - 备份说明中的原始 key 已脱敏，避免二次泄露。
 - 重写主仓库私有发布历史：
   - 新脱敏提交：`9be6ffb39`
-  - `master` 已强制更新到 `9be6ffb39`
+  - `master` 已先强制更新到脱敏提交，随后追加本公开状态快照提交。
   - `v2.0-test-20260630-1405` 标签已强制更新到 `9be6ffb39`
 - 验证远程 `master` 和 Release 标签均搜不到原始 key。
 - 已将两个 GitHub 仓库调整为公开：
@@ -25,7 +25,7 @@
 
 ## 当前修改到哪个模块
 - 当前模块：GitHub 仓库公开与公开前脱敏。
-- 当前状态：主仓库和子模块仓库均已公开，Release 标签已指向脱敏提交。
+- 当前状态：主仓库和子模块仓库均已公开，`master` 包含本公开状态快照，Release 标签已指向脱敏发布源码提交。
 
 ## 具体修改的代码前后对比
 
@@ -58,7 +58,7 @@ Key: <your-server-public-key>
 ## 已验证结果
 - `gh repo view luojiang419/rustdesk2.0 --json visibility,url`：`PUBLIC`。
 - `gh repo view luojiang419/rustdesk2.0-hbb-common --json visibility,url`：`PUBLIC`。
-- `git ls-remote github-publish refs/heads/master refs/tags/v2.0-test-20260630-1405`：两个引用均指向 `9be6ffb39`。
+- `git ls-remote github-publish refs/heads/master refs/tags/v2.0-test-20260630-1405`：`master` 指向包含本快照的最新提交，Release 标签指向脱敏发布源码提交 `9be6ffb39`。
 - `git grep` 检查远程 `master` 引用：未匹配原始 key。
 - `git grep` 检查 Release 标签引用：未匹配原始 key。
 
