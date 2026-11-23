@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+	<!--$PreVarsStart$-->
+	<?define Version="2.0.0.29724885" ?>
+	<?define Manufacturer="VNT App" ?>
+	<?define Product="vntcrustdesk" ?>
+	<?define Description="vntcrustdesk Installer" ?>
+	<?define ProductLower="vntcrustdesk" ?>
+	<?define RegKeyRoot=".$(var.ProductLower)" ?>
+	<?define RegKeyInstall="$(var.RegKeyRoot)\Install" ?>
+	<?define BuildDir="G:\data\app\rustdesk\flutter\build\windows\x64\runner\Release" ?>
+	<?define BuildDate="2026-07-08 14:38" ?>
+
+	<!-- The UpgradeCode must be consistent for each product. ! -->
+	<?define UpgradeCode = "1ea5982a-b7a9-5386-8f65-a669bacfb323" ?>
+	<!--$PreVarsEnd$-->
+
+</Include>

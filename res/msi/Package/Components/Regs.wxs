@@ -1,0 +1,56 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<?include ../Includes.wxi?>
+
+	<Fragment>
+		<!-- Regs for shortcuts are defined in "Fragments/ShortcutProperties.wxs" -->
+		<!-- Component that persists the property values to the registry so they are available during an upgrade/modify -->
+		<DirectoryRef Id="INSTALLFOLDER_INNER">
+			<Component Id="Product.Registry.InstallFolder" Guid="46d8d278-c841-496b-9dfe-69d914f5071b">
+				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)">
+					<RegistryValue Type="string" Name="INSTALLFOLDER" Value="[INSTALLFOLDER_INNER]" />
+				</RegistryKey>
+			</Component>
+
+			<Component Id="Product.Registry.DefaultIcon" Guid="b721b017-7434-41c5-be26-c49a3aadb347">
+				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)\DefaultIcon">
+					<RegistryValue Type="string" Value='"[INSTALLFOLDER_INNER]$(var.Product).exe",0' />
+				</RegistryKey>
+			</Component>
+
+			<Component Id="Product.Registry.CommandPlay" Guid="d4ad5e07-d882-43cc-8c71-097793916405">
+				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)\shell" />
+				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)\shell\open" />
+				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)\shell\open\command">
+					<RegistryValue Type="string" Value='"[INSTALLFOLDER_INNER]$(var.Product).exe" --play "%1"' />
+				</RegistryKey>
+			</Component>
+
+			<Component Id="Product.Registry.URLProtocol" Guid="36b50b6d-b07f-45d6-83c1-dab76ca57916">
+				<RegistryKey Root="HKCR" Key="$(var.ProductLower)">
+					<RegistryValue Type="string" Name="URL Protocol" Value="" />
+				</RegistryKey>
+			</Component>
+
+			<Component Id="Product.Registry.Command" Guid="9cd72039-b123-4af0-b7d5-673abc76d65e">
+				<RegistryKey Root="HKCR" Key="$(var.ProductLower)\shell" />
+				<RegistryKey Root="HKCR" Key="$(var.ProductLower)\shell\open" />
+				<RegistryKey Root="HKCR" Key="$(var.ProductLower)\shell\open\command">
+					<RegistryValue Type="string" Value='"[INSTALLFOLDER_INNER]$(var.Product).exe" "%1"' />
+				</RegistryKey>
+			</Component>
+
+			<!--For compatibility with registry values from previous versions-->
+			<Component Id="Product.Registry.UninstallApp" Guid="c7c55075-b634-469f-bf35-1d8afe101659">
+				<RegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(var.Product)" >
+					<RegistryValue Type="string" Name="BuildDate" Value="$(var.BuildDate)" />
+					<RegistryValue Type="string" Name="share_rdp" Value="" />
+
+					<!--$ArpStart$-->
+					<!--$ArpEnd$-->
+				</RegistryKey>
+			</Component>
+		</DirectoryRef>
+
+	</Fragment>
+</Wix>

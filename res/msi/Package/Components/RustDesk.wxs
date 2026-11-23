@@ -1,0 +1,424 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+	<Fragment>
+
+		<?include ../Includes.wxi?>
+
+		<DirectoryRef Id="INSTALLFOLDER_INNER" FileSource="$(var.BuildDir)">
+			<Component Id="App.exe" Guid="dc738c1e-6c88-4713-ba21-4f2c1f09438c">
+				<File Id="App.exe" Name="$(var.Product).exe" KeyPath="yes" Checksum="yes">
+					<!--<fire:FirewallException Id="AppEx" Name="$(var.Product) Service" Scope="any" IgnoreFailure="yes" />-->
+				</File>
+			</Component>
+		</DirectoryRef>
+
+		<CustomAction Id="RemoveRuntimeGeneratedFiles.SetParam" Return="check" Property="RemoveRuntimeGeneratedFiles" Value="[INSTALLFOLDER_INNER]" />
+		<CustomAction Id="AddFirewallRules.SetParam" Return="check" Property="AddFirewallRules" Value="1[INSTALLFOLDER_INNER]$(var.Product).exe" />
+		<CustomAction Id="RemoveFirewallRules.SetParam" Return="check" Property="RemoveFirewallRules" Value="0[INSTALLFOLDER_INNER]$(var.Product).exe" />
+		<CustomAction Id="CreateStartService.SetParam" Return="check" Property="CreateStartService" Value="$(var.Product);&quot;[INSTALLFOLDER_INNER]$(var.Product).exe&quot; --service" />
+		<CustomAction Id="TryStopDeleteService.SetParam" Return="check" Property="TryStopDeleteService" Value="$(var.Product)" />
+
+		<CustomAction Id="LaunchApp" ExeCommand="" Return="asyncNoWait" FileRef="App.exe" />
+		<CustomAction Id="LaunchAppTray" ExeCommand=" --tray" Return="asyncNoWait" FileRef="App.exe" />
+		<Property Id="TerminateProcesses" Value="AppTest.exe" />
+		<CustomAction Id="TerminateProcesses.SetParam" Return="check" Property="TerminateProcesses" Value="$(var.Product).exe" />
+		<CustomAction Id="TerminateBrokers.SetParam" Return="check" Property="TerminateProcesses" Value="RuntimeBroker_rustdesk.exe" />
+		<CustomAction Id="SetPropertyIsServiceRunning.SetParam.AppName" Return="check" Property="AppName" Value="$(var.Product)" />
+		<CustomAction Id="SetPropertyIsServiceRunning.SetParam.PropertyName" Return="check" Property="PropertyName" Value="STOP_SERVICE" />
+		<CustomAction Id="SetPropertyServiceStop.SetParam.ConfigFile" Return="check" Property="ConfigFile" Value="[AppDataFolder]$(var.Product)\config\$(var.Product)2.toml" />
+		<CustomAction Id="SetPropertyServiceStop.SetParam.ConfigKey" Return="check" Property="ConfigKey" Value="stop-service" />
+		<CustomAction Id="SetPropertyServiceStop.SetParam.PropertyName" Return="check" Property="PropertyName" Value="STOP_SERVICE" />
+		<CustomAction Id="TryDeleteStartupShortcut.SetParam" Return="check" Property="ShortcutName" Value="$(var.Product) Tray" />
+		<CustomAction Id="RemoveAmyuniIdd.SetParam" Return="check" Property="RemoveAmyuniIdd" Value="[INSTALLFOLDER_INNER]" />
+		<CustomAction Id="InstallPrinter.SetParam" Return="check" Property="InstallPrinter" Value="[INSTALLFOLDER_INNER]" />
+		<InstallExecuteSequence>
+
+			<Custom Action="SetPropertyIsServiceRunning" After="InstallInitialize" Condition="Installed" />
+			<Custom Action="SetPropertyIsServiceRunning.SetParam.AppName" Before="SetPropertyIsServiceRunning" Condition="Installed" />
+			<Custom Action="SetPropertyIsServiceRunning.SetParam.PropertyName" Before="SetPropertyIsServiceRunning" Condition="Installed" />
+
+			<Custom Action="SetPropertyServiceStop" After="InstallInitialize" Condition="NOT Installed" />
+			<Custom Action="SetPropertyServiceStop.SetParam.ConfigFile" Before="SetPropertyServiceStop" Condition="NOT Installed" />
+			<Custom Action="SetPropertyServiceStop.SetParam.ConfigKey" Before="SetPropertyServiceStop" Condition="NOT Installed" />
+			<Custom Action="SetPropertyServiceStop.SetParam.PropertyName" Before="SetPropertyServiceStop" Condition="NOT Installed" />
+
+			<!-- Do not call CreateStartService if is uninstalling. -->
+			<!-- (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE) means uninstalling. -->
+			<Custom Action="CreateStartService" Before="InstallFinalize" Condition="(NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT STOP_SERVICE=&quot;&apos;Y&apos;&quot;) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;)" />
+			<Custom Action="CreateStartService.SetParam" Before="CreateStartService" Condition="(NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT STOP_SERVICE=&quot;&apos;Y&apos;&quot;) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;)" />
+
+			<Custom Action="CustomActionHello" Before="InstallFinalize" />
+
+			<!--Shortcut is in InstallValidate section. So we just let it be created, then try delete if stopping service.-->
+			<Custom Action="TryDeleteStartupShortcut" After="InstallFinalize" Condition="STOP_SERVICE=&quot;&apos;Y&apos;&quot;" />
+			<Custom Action="TryDeleteStartupShortcut.SetParam" Before="SetPropertyIsServiceRunning" Condition="STOP_SERVICE=&quot;&apos;Y&apos;&quot;" />
+
+			<!-- Launch ClientLauncher if installing or already installed and not uninstalling -->
+			<!-- https://learn.microsoft.com/en-us/windows/win32/msi/uilevel -->
+			<Custom Action="LaunchApp" After="InstallFinalize" Condition="(NOT UILevel=2) AND (NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) "/>
+			<Custom Action="LaunchAppTray" After="InstallFinalize" Condition="(LAUNCH_TRAY_APP=&quot;Y&quot; OR LAUNCH_TRAY_APP=&quot;1&quot;) AND (NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)) AND (NOT STOP_SERVICE=&quot;&apos;Y&apos;&quot;) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;)"/>
+
+			<!-- https://learn.microsoft.com/en-us/windows/win32/msi/operating-system-property-values -->
+			<!-- We have to use `VersionNT` to instead of `IsWindows10OrGreater()` in the custom action.
+			Because `IsWindows10OrGreater()` requires the manifest file to be embedded in the executable/dll file.
+			Even I have embedded the manifest file, it still does not work correctly in my case.
+			https://learn.microsoft.com/en-us/windows/win32/sysinfo/version-helper-apis -->
+			<!-- VersionNT >= 603 means can't differentiate between Windows 8.1 and Windows 10.
+			Some msi packages reset the `VersionNT` value to 1000 on Windows 10.
+			https://www.advancedinstaller.com/user-guide/qa-OS-dependent-install.html -->
+			<!-- Remote printer also works on Win8.1 in my test. -->
+			<Custom Action="InstallPrinter" Before="InstallFinalize" Condition="VersionNT &gt;= 603 AND (PRINTER = 1 OR PRINTER = &quot;Y&quot; OR PRINTER = &quot;y&quot;)" />
+			<Custom Action="InstallPrinter.SetParam" Before="InstallPrinter" Condition="VersionNT &gt;= 603" />
+
+			<!--Workaround of "fire:FirewallException". If Outbound="Yes" or Outbound="true", the following error occurs.-->
+			<!--ExecFirewallExceptions: Error 0x80070057: failed to add app to the authorized apps list-->
+			<Custom Action="AddFirewallRules" Before="InstallFinalize" Condition="NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)"/>
+			<Custom Action="AddFirewallRules.SetParam" Before="AddFirewallRules" Condition="NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE)"/>
+
+			<Custom Action="AddRegSoftwareSASGeneration" Before="InstallFinalize" Condition="NOT (Installed AND REMOVE AND NOT UPGRADINGPRODUCTCODE) AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;)"/>
+
+			<Custom Action="RemoveRuntimeGeneratedFiles" Before="RemoveFiles" Condition="Installed AND (REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE)"/>
+			<Custom Action="RemoveRuntimeGeneratedFiles.SetParam" Before="RemoveRuntimeGeneratedFiles" Condition="Installed AND (REMOVE=&quot;ALL&quot; OR UPGRADINGPRODUCTCODE)"/>
+			<Custom Action="TryStopDeleteService" Before="RemoveRuntimeGeneratedFiles.SetParam" />
+			<Custom Action="TryStopDeleteService.SetParam" Before="TryStopDeleteService" />
+
+			<Custom Action="RemoveFirewallRules" Before="RemoveFiles"/>
+			<Custom Action="RemoveFirewallRules.SetParam" Before="RemoveFirewallRules"/>
+
+			<Custom Action="UninstallPrinter" Before="RemoveRuntimeGeneratedFiles" Condition="VersionNT &gt;= 603" />
+
+			<Custom Action="TerminateProcesses" Before="RemoveRuntimeGeneratedFiles"/>
+			<Custom Action="TerminateProcesses.SetParam" Before="TerminateProcesses"/>
+			<Custom Action="TerminateBrokers" Before="RemoveRuntimeGeneratedFiles"/>
+			<Custom Action="TerminateBrokers.SetParam" Before="TerminateBrokers"/>
+			<Custom Action="RemoveAmyuniIdd" Before="RemoveRuntimeGeneratedFiles"/>
+			<Custom Action="RemoveAmyuniIdd.SetParam" Before="RemoveAmyuniIdd"/>
+		</InstallExecuteSequence>
+
+		<!-- Shortcuts -->
+		<DirectoryRef Id="App.StartMenu">
+			<Component Id="App.StartMenu" Guid="b098626d-45d0-4cc5-a0a8-f559f0551bc4">
+				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.StartMenu" Type="string" Value="1" KeyPath="yes" />
+				<RemoveFolder Id="Remove.App.StartMenu" On="uninstall" />
+			</Component>
+		</DirectoryRef>
+
+		<DirectoryRef Id="App.StartMenu">
+			<Component Id="App.StartMenu.Shortcut" Guid="cd01bc23-3c48-4700-ae41-32ac67531628" Condition="STARTMENUSHORTCUTS = 1 OR STARTMENUSHORTCUTS = &quot;Y&quot; OR STARTMENUSHORTCUTS = &quot;y&quot;">
+				<Shortcut Id="App.StartMenu.Shortcut" Name="!(loc.SC_Client)" Description="!(loc.SC_Client_Desc)" Target="[!App.exe]" Icon="AppIcon" WorkingDirectory="INSTALLFOLDER_INNER" />
+				<!--
+					Fix ICE 38 by adding a dummy registry key that is the key for this shortcut.
+					https://learn.microsoft.com/en-us/windows/win32/msi/ice38
+				-->
+				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.StartMenu.Shortcut" Type="string" Value="1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="App.StartMenu.ShortcutUninstall" Guid="e46c0858-316f-4395-b865-b93a292a8b32" Condition="STARTMENUSHORTCUTS = 1 OR STARTMENUSHORTCUTS = &quot;Y&quot; OR STARTMENUSHORTCUTS = &quot;y&quot;">
+				<Shortcut Id="App.StartMenu.ShortcutUninstall" Name="!(loc.SC_Uninstall)" Description="!(loc.SC_Uninstall_Desc)" Target="[System6432Folder]msiexec.exe" Arguments="/x [ProductCode]" Icon="AppIcon" />
+				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.StartMenu.ShortcutUninstall" Type="string" Value="1" KeyPath="yes" />
+			</Component>
+		</DirectoryRef>
+		<StandardDirectory Id="DesktopFolder">
+			<Component Id="App.Desktop.Shortcut" Guid="c5487f98-cf1d-4a03-8e87-d8ae05acfede" Condition="DESKTOPSHORTCUTS = 1 OR DESKTOPSHORTCUTS = &quot;Y&quot; OR DESKTOPSHORTCUTS = &quot;y&quot;">
+				<Shortcut Id="App.Desktop.Shortcut" Name="!(loc.SC_Client)" Description="!(loc.SC_Client_Desc)" Target="[!App.exe]" Icon="AppIcon" WorkingDirectory="INSTALLFOLDER_INNER" />
+				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.Desktop.Shortcut" Type="string" Value="1" KeyPath="yes" />
+			</Component>
+		</StandardDirectory>
+		<StandardDirectory Id="StartupFolder">
+			<Component Id="App.StartupFolder.ShortcutTray" Guid="91f9037d-5419-4552-93db-87b75747629a" Condition="STARTUPSHORTCUTS = 1 AND (NOT CC_CONNECTION_TYPE=&quot;outgoing&quot;)">
+				<Shortcut Id="App.StartupFolder.ShortcutTray" Name="!(loc.SC_Client_Tray)" Description="!(loc.SC_Client_Tray_Desc)" Target="[!App.exe]" Arguments="--tray" Icon="AppIcon" WorkingDirectory="INSTALLFOLDER_INNER" />
+				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.StartupFolder.ShortcutTray" Type="string" Value="1" KeyPath="yes" />
+			</Component>
+		</StandardDirectory>
+
+		<!--<DirectoryRef Id="INSTALLFOLDER_INNER">
+			<Component Id="App.UninstallShortcut" Guid="04cf61cf-eedb-4aec-b46f-5fc7e2643b2a">
+				<Shortcut Id="App.UninstallShortcut" Name="!(loc.SC_Uninstall)" Description="!(loc.SC_Uninstall_Desc)" Target="[System6432Folder]msiexec.exe" Arguments="/x [ProductCode]" Icon="AppIcon" />
+			</Component>
+		</DirectoryRef>-->
+
+		<ComponentGroup Id="Components" Directory="INSTALLFOLDER_INNER">
+			<ComponentRef Id="App.exe" />
+			<ComponentRef Id="App.Desktop.Shortcut" />
+			<!--<ComponentRef Id="App.UninstallShortcut" />-->
+			<ComponentRef Id="App.StartMenu.Shortcut" />
+			<ComponentRef Id="App.StartMenu.ShortcutUninstall" />
+			<ComponentRef Id="App.StartupFolder.ShortcutTray" />
+
+			<!--$AutoComonentStart$-->
+			<Component Guid="607b3299-aea4-4629-b2b9-bff50514af48" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/desktop_drop_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="728d8454-56e7-44d8-a4a7-18704d641b78" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/desktop_multi_window_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f4065b5c-b7ae-48f1-83d9-4353bebedede" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/file_selector_windows_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="cc622af7-bc16-4830-bfad-7ccc6ccd3279" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/flutter_custom_cursor_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="136c14e7-d2f9-4213-bb6e-9a561df8a2b6" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/flutter_gpu_texture_renderer_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="65402f0d-02c9-45b3-afe5-99bbb692aa85" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/flutter_windows.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="3f81811f-b6b1-4913-a1af-86078e31602e" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/librustdesk.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="153a2e68-c59d-40a7-8064-6a7f3520943a" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/screen_retriever_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="04fd1665-af7b-4959-9d16-f8ebd2bd317b" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/texture_rgba_renderer_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="e029ce62-2068-4b84-96de-5924b50fe775" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/uni_links_desktop_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="8b92e3f8-7d9e-4a47-97a0-78837f495450" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/url_launcher_windows_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="48f16458-0746-4b31-9152-a25a9fea4dac" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/window_manager_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b8a7a7d4-505b-441f-996e-dfba40094e8f" >
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/window_size_plugin.dll" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="2ea69245-a684-4465-81a7-6ae4eee9c815" Subdirectory="data">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/app.so" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="d82454a1-a40f-44bc-8de6-736c35c68e45" Subdirectory="data">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/icudtl.dat" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="a00460a3-59d1-4889-8209-f29ab4fab2c7" Subdirectory="data\flutter_assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/AssetManifest.bin" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="9487ad08-7ecf-4730-b842-b6473eae511f" Subdirectory="data\flutter_assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/FontManifest.json" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="52bfef29-650b-468e-baf3-2528f638ebdd" Subdirectory="data\flutter_assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/NativeAssetsManifest.json" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="a8ccb1d4-20a6-4cf8-9e5b-57b6e2217a95" Subdirectory="data\flutter_assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/NOTICES.Z" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="ec8da14f-b030-4890-af77-9a5d48e0fd95" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/actions.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="fe374cb1-b033-4fac-baae-918e1c4610ba" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/actions_mobile.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="7deeb779-0167-44fd-838b-0502119053a3" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/address_book.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="6c409645-3c8c-4eef-beb6-62aefd6f9bf4" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/android.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="187ed5a8-7560-49ab-b5cc-cb60fd0432af" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/arrow.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="6a77f381-3ee9-4b7c-a815-57f9813be3b4" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-apple.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="d1e6d9ab-17e0-4dea-8601-40744ff7befb" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-auth0.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f8e91510-3d43-4d30-b62a-00b3d3d810cc" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-default.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f1348686-6dc9-45f6-9569-17e82d4bc27f" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-facebook.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="6b9e15ac-dc3f-4fa5-aed9-63aa4cbd2393" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-github.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="e8a3851d-1f46-4494-a65c-2c821f3c2435" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-gitlab.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="de56bbfe-9e74-4f71-9ab7-8f1771f7de67" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-google.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="754a9a99-d967-4018-bf47-8468d0375fe0" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-microsoft.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="49e0bd88-82cb-42c9-8fa4-92d492871b94" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/auth-okta.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="30bf6977-21c1-4e07-9e64-f59a385110e3" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/call_end.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="53e34563-e241-48d4-8e5c-047e13c4012f" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/call_wait.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="74f847ce-823b-44a4-82ea-04acce7488f9" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/chat.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="25060eaa-0b61-481a-8a8a-66dfd6d4ee54" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/chat2.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="365d085d-25a9-4810-82cc-80a769d00619" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/checkbox-outline.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="607087aa-9e62-4cad-882d-06630c7ca2eb" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/chevron_up_chevron_down.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b614efc2-9a4f-4e14-a1d1-645e14ffa1c7" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/close.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="e7bf2d3c-3fff-4768-9aee-0ee51ca754ea" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/device_group.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="ce614996-e8a6-4090-b768-f3604b8df000" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/display.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b3383023-298e-4f01-9cf4-a00bbbcf4fe3" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/display_switcher.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="a812e612-261d-4724-9e85-edbc8135521b" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/dots.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="116aa234-7a5f-476b-b44a-91b29795c7de" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/file.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="ade0ffc7-5e26-4d46-8a16-111255d1ba3f" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/file_transfer.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="11492f96-d1c8-474c-b920-52a6f36e4c25" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/folder.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b7bd03b8-4c1c-4b8b-87cf-fcdc6e1b1336" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/folder_new.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="c7d1de07-f4b3-42e3-b617-d28aa7c20f58" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/fullscreen.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="e43e1493-a84a-446f-80b9-1a91356c7478" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/fullscreen_exit.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="78ddf996-0e8e-4ce8-91bd-b9efceeaeb1a" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/gestures.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="00aabbab-6222-48cc-b59a-022eb3716a3b" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/home.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="ea568515-17fe-41d6-8e21-1d119a55e30e" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/icon.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="4c6e36c4-359d-4af1-9449-54679bc93a49" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/insecure.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="a9cff343-f50c-40e9-8ef8-028cdd7aaf7c" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/insecure_relay.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="46fd6cbe-ebc1-4d38-a715-ff0f48fb65bb" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/kb_layout_iso.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="c25bdc8f-1e7e-4402-9861-4a9946f8fec1" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/kb_layout_not_iso.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="fc35f360-66a8-44d7-8f6d-5cd20c6bfbe3" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/keyboard_mouse.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f26c3ed2-b270-40eb-8208-606727a31e97" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/linux.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="0f13f111-fa50-4148-93b5-c9b326ef2cc3" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/mac.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="dd9d0399-e72c-4c83-a467-a83c53b53b62" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/message_24dp_5F6368.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="423876ee-ee59-43c0-b543-01f35496d9e9" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/more.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="1f696848-9392-445c-8a52-0836b155f406" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/peer_searchbar.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="dba48036-5111-43f6-a5f9-7c6fe43a1879" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/pinned.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f0eaa105-cc22-42e2-89c0-5c76f7396e84" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/rec.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="c21ebcf4-7a73-45f7-b9d5-b4350b93cd88" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/record_screen.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="1dee488e-d565-4974-810e-796e279f1a83" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/refresh.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="367d41f1-d687-4a78-b5c5-f72e3102f98e" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/scam.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="6c80f9a6-36f7-4ee0-8d93-8d0cbce542c1" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/screen.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="e0bd6f97-80b1-45d9-90cc-9622f6dadcb4" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/search.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="0bf829ee-1be3-424a-83f3-d99cbdeafb58" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/secure.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="f1b530c5-abf9-404a-a5d6-861e20a5f7c2" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/secure_relay.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="42613de0-f92c-4069-a503-93d434550df1" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/tabbar.ttf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b23e0d22-6b38-4c23-af6c-840fcdb10d7b" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/transfer.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="00d97e92-fc76-4195-9ffe-b888535f3a31" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/trash.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="15070129-332c-4a80-a4e7-39e4b6d1b87a" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/unpinned.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b8d068e0-6091-4d35-847d-a4b119d978ab" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/voice_call.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="4db4e0e0-a6cd-4064-af1b-b0713f97fa26" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/voice_call_waiting.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="7e0244bd-f464-4760-9af8-5a95da73b032" Subdirectory="data\flutter_assets\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/assets/win.svg" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="95fea257-6001-4e56-b2d3-a76990caade9" Subdirectory="data\flutter_assets\fonts">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/fonts/MaterialIcons-Regular.otf" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="734099c0-8c39-4ad6-9e3d-4f216adc3e46" Subdirectory="data\flutter_assets\shaders">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/shaders/ink_sparkle.frag" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="58fd6453-4aa9-41c9-8e7e-243d4581c00c" Subdirectory="data\flutter_assets\shaders">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/shaders/stretch_effect.frag" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="c94c2449-653b-4b58-9ef9-be7af8915d28" Subdirectory="data\flutter_assets\packages\dash_chat_2\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/dash_chat_2/assets/placeholder.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="d2e9fd84-d1a8-4786-a823-48668879dd39" Subdirectory="data\flutter_assets\packages\dash_chat_2\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/dash_chat_2/assets/profile_placeholder.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="b0a0bf82-0abe-4042-89cf-cd358fe7f16e" Subdirectory="data\flutter_assets\packages\flex_color_picker\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/flex_color_picker/assets/opacity.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="d93fd759-84be-4886-a705-9ce7d63b54e1" Subdirectory="data\flutter_assets\packages\wakelock_plus\assets">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/wakelock_plus/assets/no_sleep.js" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="41955883-9de2-4d1d-a17c-2cb28cda0d73" Subdirectory="data\flutter_assets\packages\window_manager\images">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/window_manager/images/ic_chrome_close.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="a12efcf2-a4d1-4cf9-aea1-e3da28e9e363" Subdirectory="data\flutter_assets\packages\window_manager\images">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/window_manager/images/ic_chrome_maximize.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="bcbe1389-ae63-4810-9335-c87abaacfa34" Subdirectory="data\flutter_assets\packages\window_manager\images">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/window_manager/images/ic_chrome_minimize.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<Component Guid="3348d6d9-f726-4fab-9ac1-7283776e5bff" Subdirectory="data\flutter_assets\packages\window_manager\images">
+				<File Source="G:/data/app/rustdesk/flutter/build/windows/x64/runner/Release/data/flutter_assets/packages/window_manager/images/ic_chrome_unmaximize.png" KeyPath="yes" Checksum="yes" />
+			</Component>
+			<!--$AutoComponentEnd$-->
+
+		</ComponentGroup>
+
+	</Fragment>
+</Wix>
